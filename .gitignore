@@ -8,3 +8,4 @@
 sourcemap.json
 node_modules/
 build/
+deploy-docs.sh
