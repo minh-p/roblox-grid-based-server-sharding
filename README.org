@@ -1,0 +1,4 @@
+#+title: Readme
+
+Roblox non-layered grid-based server sharding implementation.
+URL: https://bio.vhmp.dev/posts/roblox-grid-based-server-sharding-with-instancing/
