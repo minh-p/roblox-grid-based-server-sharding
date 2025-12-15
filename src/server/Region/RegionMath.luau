@@ -4,7 +4,7 @@ type HexAxis = Types.HexAxis
 type HexCube = Types.HexCube
 
 --- @class RegionMath
----
+--- @server
 --- Process mathematical calculations to calculate region player is crossing to
 local RegionMath = require(ReplicatedStorage.Shared.OOP).class{radius = 10, gridPos = {0, 0}}
 
@@ -50,10 +50,9 @@ function RegionMath.cubeHexRoundedFromFractionalAxisHex(hexAxis: HexAxis): HexCu
   local error_z = math.abs(rounded_z - z)
 
   -- Constraint Enforcement
-  local max_error = math.max(error_x, error_y, error_z)
-  if max_error == error_x then
+  if error_x > error_y and error_x > error_z then
     rounded_x = -rounded_y - rounded_z
-  elseif max_error == error_y then
+  elseif error_y > error_x and error_y > error_z then
     rounded_y = -rounded_x - rounded_z
   else
     rounded_z = -rounded_x - rounded_y
@@ -68,9 +67,9 @@ end
 
 --- Returns true if region has been crossed.
 ---
---- @param hexCube HexCube -- Hex cubic coordinate snapped to nearest grid.
-function RegionMath.regionCrossingCheck(hexCube: HexCube): boolean
-  if hexCube.x ~= 0 or hexCube.z ~= 0 then return true end
+--- @param hexAxis HexAxis -- Hex axial coordinate snapped to nearest grid.
+function RegionMath.regionCrossingCheck(hexAxis: HexAxis): boolean
+  if hexAxis.r ~= 0 or hexAxis.q ~= 0 then return true end
   return false
 end
 

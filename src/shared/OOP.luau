@@ -47,7 +47,7 @@ end
 ---   return self.x + self.y
 --- end
 --- function Class:__tostring()
----   print(`Class has attributes {self.x}, {self.y}`)
+---   return `Class has attributes {self.x}, {self.y}`
 --- end
 --- return Class
 --- ````
@@ -98,7 +98,7 @@ end
 --- @param object OOPClass -- Object passed to remoteListener which holds the methods.
 --- @param remoteEvent RemoteEvent -- Remote Event used
 --- @param method string -- Method's name as an attribute in object
-function Utility.remoteListener(object, remoteEvent, method)
+function Utility.remoteEventListener(object, remoteEvent: RemoteEvent, method: string)
   if RunService:IsServer() then
     remoteEvent.OnServerEvent:Connect(function(...)
       object[method](object, ...)
@@ -107,6 +107,23 @@ function Utility.remoteListener(object, remoteEvent, method)
    remoteEvent.OnClientEvent:Connect(function(...)
      object[method](object, ...)
    end)
+  end
+end
+
+--- Remote function bind on either client or server
+---
+--- @param object OOPClass -- Object passed to remoteListener which holds the methods.
+--- @param remoteFunction RemoteFunction -- Remote Function used
+--- @param method string -- Method's name as an attribute in object
+function Utility.remoteFunctionListener(object, remoteFunction: RemoteFunction, method: string)
+  if RunService:IsServer() then
+    remoteFunction.OnServerInvoke = function(...)
+      return object[method](object, ...)
+    end
+  elseif RunService:IsClient() then
+   remoteFunction.OnClientInvoke = function(...)
+     return object[method](object, ...)
+   end
   end
 end
 
