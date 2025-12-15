@@ -2,6 +2,81 @@
 -- Designer: SuperSpeedy101
 local RunService = game:GetService("RunService")
 
+--- @class OOP
+---
+--- Luau Object-Orientated Programming Framework. https://devforum.roblox.com/t/efficient-object-oriented-programming-tutorial/1061153
+local OOP = {}
+
+--- @type OOPClass {any}
+--- @within OOP
+--- A class created from OOP.class({})
+
+--- OOPClass() constructor, metamethod setting. After receving the OOPClass through OOP.class({}), object can be constructed with OOPClass()
+---
+--- @param ... List<Any> -- Arguments passed through as constructor.
+function OOP:__call(...)
+  local object = {}
+  setmetatable(object, self)
+
+  if self.__init then
+    self.__init(object, ...)
+  end
+  return object
+end
+
+--- OOPObject indexing with inheritance implemented. Inheritance depends on if __super assigned to super class is an attribute of class attributes list pass to .class().
+---
+--- @param index any -- metamethod param index can be a string, number, or any non-nil value.
+function OOP:__index(index: any)
+  if rawget(self, "__super") then
+    return self.__super[index]
+  end
+  return rawget(self, index)
+end
+
+--- A OOP class is defined in a module script:
+--- ```lua
+--- local Class = OOP.class{x = 1, y = 2}
+--- function Class:__init(x, y)
+---   -- If x, y are nil, default values are referenced
+---   -- because of metatable assignment
+---   self.x = x
+---   self.y = y
+--- end
+--- function Class:getSum()
+---   return self.x + self.y
+--- end
+--- function Class:__tostring()
+---   print(`Class has attributes {self.x}, {self.y}`)
+--- end
+--- return Class
+--- ````
+---
+--- And then utilized elsewhere:
+--- ```lua
+--- local Class = require(CLASS_PATH)
+--- local object = Class()
+--- -- Or
+--- local object = Class(1, 2)
+---
+--- print(object:getSum()) --> 3
+--- print(object) --> "Class has attributes 1, 2"
+--- ```
+---
+--- @param class any -- Attributes list for default values, __super inheritance.
+function OOP.class(class: any)
+  if class.__super then
+    for key, value in pairs(class.__super) do
+      local sub = string.sub(key, 1, 2)
+      if sub == "__" and key ~= "__super" and key ~= "__init" then
+        class[key] = value
+      end
+    end
+  end
+  class.__index = class
+  return setmetatable(class, OOP)
+end
+
 --- @class Utility
 ---
 --- Utility for event listeners structured in the OOP way.
@@ -45,49 +120,9 @@ function Utility.bindToClose(object, method)
   end)
 end
 
---- @class OOP
----
---- Luau Object-Orientated Programming Framework. https://devforum.roblox.com/t/efficient-object-oriented-programming-tutorial/1061153
-local OOP = {}
+--- @prop Utility Utility
+--- @within OOP
+--- OOP.Utility provides the Utility module
 OOP.Utility = Utility
-
---- OOPClass() constructor, metamethod setting. After receving the OOPClass through OOP.class({}), object can be constructed with OOPClass()
----
---- @param ... List<Any> -- Arguments passed through as constructor.
-function OOP:__call(...)
-  local object = {}
-  setmetatable(object, self)
-
-  if self.__init then
-    self.__init(object, ...)
-  end
-  return object
-end
-
---- OOPObject indexing with inheritance implemented. Inheritance depends on if __super assigned to super class is an attribute of class attributes list pass to .class().
----
---- @param index any -- metamethod param index can be a string, number, or any non-nil value.
-function OOP:__index(index: any)
-  if rawget(self, "__super") then
-    return self.__super[index]
-  end
-  return rawget(self, index)
-end
-
---- Create class
----
---- @param class any -- Attributes list for default values, __super inheritance.
-function OOP.class(class: any)
-  if class.__super then
-    for key, value in pairs(class.__super) do
-      local sub = string.sub(key, 1, 2)
-      if sub == "__" and key ~= "__super" and key ~= "__init" then
-        class[key] = value
-      end
-    end
-  end
-  class.__index = class
-  return setmetatable(class, OOP)
-end
-
 return OOP
+
