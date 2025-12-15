@@ -10,8 +10,8 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             rojo
-            (callPackage ./wally.nix)
-            (callPackage ./luau-lsp.nix)
+            (callPackage ./wally.nix { })
+            (callPackage ./luau-lsp.nix { })
           ];
         };
       });
