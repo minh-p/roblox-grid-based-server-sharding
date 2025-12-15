@@ -28,8 +28,14 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TestService = game:GetService("TestService")
+--- @class TestRunner
+---
+--- Runs all the tests of module scripts with suffix .spec in given folder.
 local TestRunner = require(ReplicatedStorage.Shared.OOP).class{}
 
+--- Constructor
+---
+--- @param testsFolder Folder -- Folder where test module scripts are located.
 function TestRunner:__init(testsFolder: Folder)
   self.testsFolder = testsFolder
 end
@@ -56,6 +62,7 @@ local function runSpec(specValue)
   error("Spec must return a function, or a table with `run`, or a table with `steps`", 2)
 end
 
+--- Runs the tests in self.testsFolder
 function TestRunner:run(): nil
   local failed = 0
   local passed = 0

@@ -12,6 +12,7 @@
             rojo
             (callPackage ./wally.nix { })
             (callPackage ./luau-lsp.nix { })
+            nodejs
           ];
         };
       });
