@@ -15,7 +15,7 @@ local OOP = {}
 --- OOPClass() constructor, metamethod setting. After receving the OOPClass through OOP.class({}), object can be constructed with OOPClass()
 ---
 --- @param ... List<Any> -- Arguments passed through as constructor.
-function OOP:__call(...)
+function OOP:__call(...): any
   local object = {}
   setmetatable(object, self)
 
@@ -29,7 +29,7 @@ end
 --- @within OOP
 --- @param class OOPClass -- Object/class being looked up
 --- @param key string -- Key (attribute/method) being looked up
-local function lookupInClassChain(class, key: string)
+local function lookupInClassChain(class, key: string): any
   local v = rawget(class, key)
   if v ~= nil then return v end
 
@@ -71,7 +71,7 @@ end
 --- ```
 ---
 --- @param class any -- Attributes list for default values, __super inheritance.
-function OOP.class(class: any)
+function OOP.class(class: any): any
   if class.__super then
     for key, value in pairs(class.__super) do
       local sub = string.sub(key, 1, 2)
@@ -101,10 +101,11 @@ local Utility = {}
 --- @param object OOPClass -- Object passed to eventListener which holds the methods.
 --- @param event RBXScriptSignal -- Event passed to the function
 --- @param method string -- Method's name as an attribute in object
-function Utility.eventListener(object, event: RBXScriptSignal, method: string)
+function Utility.eventListener(object, event: RBXScriptSignal, method: string): nil
   event:Connect(function(...)
     object[method](object, ...)
   end)
+  return nil
 end
 
 --- Remote event bind on either client or server
@@ -112,7 +113,7 @@ end
 --- @param object OOPClass -- Object passed to remoteListener which holds the methods.
 --- @param remoteEvent RemoteEvent -- Remote Event used
 --- @param method string -- Method's name as an attribute in object
-function Utility.remoteEventListener(object, remoteEvent: RemoteEvent, method: string)
+function Utility.remoteEventListener(object, remoteEvent: RemoteEvent, method: string): nil
   if RunService:IsServer() then
     remoteEvent.OnServerEvent:Connect(function(...)
       object[method](object, ...)
@@ -122,6 +123,7 @@ function Utility.remoteEventListener(object, remoteEvent: RemoteEvent, method: s
      object[method](object, ...)
    end)
   end
+  return nil
 end
 
 --- Remote function bind on either client or server
@@ -129,7 +131,7 @@ end
 --- @param object OOPClass -- Object passed to remoteListener which holds the methods.
 --- @param remoteFunction RemoteFunction -- Remote Function used
 --- @param method string -- Method's name as an attribute in object
-function Utility.remoteFunctionListener(object, remoteFunction: RemoteFunction, method: string)
+function Utility.remoteFunctionListener(object, remoteFunction: RemoteFunction, method: string): nil
   if RunService:IsServer() then
     remoteFunction.OnServerInvoke = function(...)
       return object[method](object, ...)
@@ -139,16 +141,33 @@ function Utility.remoteFunctionListener(object, remoteFunction: RemoteFunction, 
      return object[method](object, ...)
    end
   end
+  return nil
+end
+
+--- Function to continuously cycle per interval
+---
+--- @param object OOPClass
+--- @param interval number -- Time per cycle
+--- @param method string -- Method name
+function Utility.cycle(object, interval: number, method: string): nil
+  task.spawn(function()
+    while true do
+      object[method](object)
+      task.wait(interval)
+    end
+  end)
+  return nil
 end
 
 --- Bind to game's closing event (game:BindToClose())
 ---
 --- @param object OOPClass -- Object which holds the methods
 --- @param method string -- Method's name as an attribute in object.
-function Utility.bindToClose(object, method)
+function Utility.bindToClose(object, method): nil
   game:BindToClose(function()
     object[method](object)
   end)
+  return nil
 end
 
 --- @prop Utility Utility
