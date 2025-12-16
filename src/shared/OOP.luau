@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local OOP = {}
 
 --- @type OOPClass {any}
+--- @private
 --- @within OOP
 --- A class created from OOP.class({})
 
@@ -24,14 +25,20 @@ function OOP:__call(...)
   return object
 end
 
---- OOPObject indexing with inheritance implemented. Inheritance depends on if __super assigned to super class is an attribute of class attributes list pass to .class().
----
---- @param index any -- metamethod param index can be a string, number, or any non-nil value.
-function OOP:__index(index: any)
-  if rawget(self, "__super") then
-    return self.__super[index]
+--- Helper that searches class + its __super chain
+--- @within OOP
+--- @param class OOPClass -- Object/class being looked up
+--- @param key string -- Key (attribute/method) being looked up
+local function lookupInClassChain(class, key: string)
+  local v = rawget(class, key)
+  if v ~= nil then return v end
+
+  local super = rawget(class, "__super")
+  if super ~= nil then
+    return lookupInClassChain(super, key)
   end
-  return rawget(self, index)
+
+  return nil
 end
 
 --- A OOP class is defined in a module script:
@@ -73,7 +80,14 @@ function OOP.class(class: any)
       end
     end
   end
-  class.__index = class
+  class.__index = function(obj, key)
+    -- rawget(obj, key) is always nil here (otherwise __index wouldn't run),
+    -- but leaving it makes intent explicit and is harmless.
+    local v = rawget(obj, key)
+    if v ~= nil then return v end
+
+    return lookupInClassChain(class, key)
+  end
   return setmetatable(class, OOP)
 end
 
