@@ -150,7 +150,7 @@ function RegionManager:regionCrossEval(player: Player, position: Vector3): boole
   local fractionalHexAxis = self._regionMath:getFractionalAxisHex(position.X, position.Z)
   local cubeHexRounded = self._regionMath.cubeHexRoundedFromFractionalAxisHex(fractionalHexAxis)
   local axisHex = self._regionMath.getAxisFromHexCube(cubeHexRounded)
-  return self._regionMath.regionCrossingCheck(axisHex), axisHex
+  return self._regionMath.regionCrossingCheck(axisHex), axisHex, fractionalHexAxis
 end
 
 --- @private
@@ -176,8 +176,9 @@ end
 function RegionManager:_onGetRegionInfo(player: Player)
   local playerCharacter = player.Character or player.CharacterAdded:Wait()
   local humanoidRootPart = playerCharacter.HumanoidRootPart or playerCharacter:WaitForChild("HumanoidRootPart")
-  local regionCrossed, axisHex = self:regionCrossEval(player, humanoidRootPart.Position)
-  return self._worldId, self._gridPos, regionCrossed, axisHex 
+  local regionCrossed, axisHex, fractionalAxisHex = self:regionCrossEval(player, humanoidRootPart.Position)
+  local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
+  return self._worldId, self._gridPos, regionCrossed, axisHex, positionRelativeToNewRegion
 end
 
 --- Load region from data store, use standalone only for debug

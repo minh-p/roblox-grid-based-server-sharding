@@ -22,10 +22,10 @@ end
 
 --- Construct Gui method
 function DebugGui:constructGui(): PractElement
-  local worldId, gridPos, crossedRegion, axisHex = self.regionInfoRemoteFunction:InvokeServer()
+  local worldId, gridPos, crossedRegion, axisHex, posRel = self.regionInfoRemoteFunction:InvokeServer()
   return Pract.create("ScreenGui", {ResetOnSpawn = false}, {
     RegionInfoLabel = Pract.create("TextLabel", {
-      Text = `Region Info: {worldId}: ({gridPos.q}, {gridPos.r}), Crossed Region: {crossedRegion}: Hex Axial ({axisHex.r}, {axisHex.q})`,
+      Text = `Region Info: {worldId}: ({gridPos.q}, {gridPos.r}), Crossed Region: {crossedRegion}: Hex Axial ({axisHex.r}, {axisHex.q}) Cartesian relative to current region: ({math.round(posRel.x)}, {math.round(posRel.z)})`,
       TextSize = 24,
       BackgroundTransparency = 1,
       Position = UDim2.fromScale(0.6, 0.1),
