@@ -10,7 +10,7 @@ local RunService = game:GetService("RunService")
 local Types = require(ReplicatedStorage.Shared.Types)
 local RegionMath = require(ServerScriptService.Server.Region.RegionMath)
 local TeleportService = game:GetService("TeleportService")
-type HexAxis = Types.HexAxis
+type HexAxial = Types.HexAxial
 type SerializedVector3 = Types.SerializedVector3
 local OOP = require(ReplicatedStorage.Shared.OOP)
 
@@ -267,13 +267,13 @@ function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
   if not self._regionMath then return end
   for _, player in ipairs(Players:GetPlayers()) do
     if not self._playerPositions[player.UserId] then return end
-    local crossed, axisHex, fractionalAxisHex = self:regionCrossEval(self._playerPositions[player.UserId])
+    local crossed, hexAxial, fractionalHexAxial = self:regionCrossEval(self._playerPositions[player.UserId])
     if not crossed then continue end
-    local new_region_q = self._gridPos.q + axisHex.q
-    local new_region_r = self._gridPos.r + axisHex.r
-    local enterDir = self._regionMath.getEnterDir(axisHex)
+    local new_region_q = self._gridPos.q + hexAxial.q
+    local new_region_r = self._gridPos.r + hexAxial.r
+    local enterDir = self._regionMath.getEnterDir(hexAxial)
     self._sendTeleportStatusRemoteEvent:FireClient(player, `Teleporting to region ({new_region_r},{new_region_q})`)
-    local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
+    local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalHexAxial, hexAxial)
     local getRegionLiveSuccess, regionLiveVal = pcall(function()
       return self._regionLive:GetAsync(`{self._worldId}:{new_region_r},{new_region_q}`)
     end)
@@ -326,20 +326,20 @@ end
 --- Teleport to player to region grid
 ---
 --- @param player Player -- The player being teleported
---- @param hexAxis HexAxis -- The grid's coordinate in hex axial coordinate
+--- @param hexAxial HexAxial -- The grid's coordinate in hex axial coordinate
 --- @param relativePosition SerializedVector3 -- The player's new position relative to new region.
 --- @param lookAt SerializedVector3 -- The player's lookAt or orientation
 --- @param accessCode string -- Private server access code
-function RegionManager:teleportPlayerToRegion(player: Player, hexAxis: HexAxis, relativePosition: SerializedVector3, lookAt: SerializedVector3, enterDir: number, accessCode: string): nil
+function RegionManager:teleportPlayerToRegion(player: Player, hexAxial: HexAxial, relativePosition: SerializedVector3, lookAt: SerializedVector3, enterDir: number, accessCode: string): nil
   if self._playerTeleportQueue[player.UserId] then return end
   self._playerTeleportQueue[player.UserId] = true
   self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting...")
-  if not self:evaluateTeleportable(hexAxis) then
+  if not self:evaluateTeleportable(hexAxial) then
     self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting Failed")
   else
     TeleportService:TeleportToPrivateServer(game.PlaceId, accessCode, { player }, nil, {
       worldId = self._worldId,
-      gridPos = hexAxis,
+      gridPos = hexAxial,
       localPos = relativePosition,
       lookAt = lookAt,
       accessCode = accessCode,
@@ -356,9 +356,9 @@ end
 
 --- Evalute of region is teleportable to
 ---
---- @param hexAxis HexAxis -- The region grid to find or create new
-function RegionManager:evaluateTeleportable(hexAxis: HexAxis): (boolean, boolean | nil)
-  local key = `{self._worldId}:{hexAxis.r},{hexAxis.q}`
+--- @param hexAxial HexAxial -- The region grid to find or create new
+function RegionManager:evaluateTeleportable(hexAxial: HexAxial): (boolean, boolean | nil)
+  local key = `{self._worldId}:{hexAxial.r},{hexAxial.q}`
   local getSuccess, val = pcall(function()
     return self._regionLive:GetAsync(key)
   end)
@@ -379,10 +379,10 @@ end
 --- Check if position has crossed region.
 function RegionManager:regionCrossEval(position: Vector3): boolean
   if not self._regionMath then return false end
-  local fractionalHexAxis = self._regionMath:getFractionalAxisHex(position.X, position.Z)
-  local cubeHexRounded = self._regionMath.cubeHexRoundedFromFractionalAxisHex(fractionalHexAxis)
-  local axisHex = self._regionMath.getAxisFromHexCube(cubeHexRounded)
-  return self._regionMath.regionCrossingCheck(axisHex), axisHex, fractionalHexAxis
+  local fractionalHexAxial = self._regionMath:getFractionalHexAxial(position.X, position.Z)
+  local cubeHexRounded = self._regionMath.cubeHexRoundedFromFractionalHexAxial(fractionalHexAxial)
+  local hexAxial = self._regionMath.getAxisFromHexCubic(cubeHexRounded)
+  return self._regionMath.regionCrossingCheck(hexAxial), hexAxial, fractionalHexAxial
 end
 
 --- @private
@@ -440,9 +440,9 @@ function RegionManager:_onGetRegionInfo(player: Player)
   if not self._regionMath then return end
   local playerCharacter = player.Character or player.CharacterAdded:Wait()
   local humanoidRootPart = playerCharacter:WaitForChild("HumanoidRootPart")
-  local regionCrossed, axisHex, fractionalAxisHex = self:regionCrossEval(humanoidRootPart.Position)
-  local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
-  return self._worldId, self._gridPos, regionCrossed, axisHex, positionRelativeToNewRegion
+  local regionCrossed, hexAxial, fractionalHexAxial = self:regionCrossEval(humanoidRootPart.Position)
+  local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalHexAxial, hexAxial)
+  return self._worldId, self._gridPos, regionCrossed, hexAxial, positionRelativeToNewRegion
 end
 
 --- Load region from data store, use standalone only for debug

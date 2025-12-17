@@ -7,7 +7,7 @@ local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local OOP = require(ReplicatedStorage.Shared.OOP)
 local Types = require(ReplicatedStorage.Shared.Types)
-type HexAxis = Types.HexAxis
+type HexAxial = Types.HexAxial
 type SerializedVector3 = Types.SerializedVector3
 --- @class DebugGui
 --- @client
@@ -22,7 +22,7 @@ function DebugGui:__init()
 end
 
 --- Construct Gui method
-function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxis, regionCrossed: boolean, axisHex: HexAxis, posRel: SerializedVector3, teleportStatus: string}): PractElement
+function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxial, regionCrossed: boolean, hexAxial: HexAxial, posRel: SerializedVector3, teleportStatus: string}): PractElement
   if not props.worldId then
     return Pract.create("ScreenGui", {ResetOnSpawn = false}, {
       Label = Pract.create("TextLabel", {
@@ -43,7 +43,7 @@ function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxis, region
         AnchorPoint = Vector2.new(0.5, 0.5)
       }),
       RegionCoordinatesLabel = Pract.create("TextLabel", {
-        Text = `Hex Axial ({props.axisHex.r}, {props.axisHex.q}) Cartesian relative to current region: ({math.round(props.posRel.x)}, {math.round(props.posRel.z)})` ,
+        Text = `Hex Axial ({props.hexAxial.r}, {props.hexAxial.q}) Cartesian relative to current region: ({math.round(props.posRel.x)}, {math.round(props.posRel.z)})` ,
         TextSize = 24,
         BackgroundTransparency = 1,
         Position = UDim2.fromScale(0.6, 0.2),
@@ -68,20 +68,20 @@ function DebugGui:generateClassComponent()
         worldId = "",
         gridPos = {r=0, y=0},
         crossedRegion = false,
-        axisHex = {r=0, q=0},
+        hexAxial = {r=0, q=0},
         posRel = {x=0, y=0, z=0},
         teleportStatus = ""
       }
       cls.mounted = true
       task.spawn(function()
         repeat
-          local worldId, gridPos, regionCrossed, axisHex, posRel = self._regionInfoRemoteFunction:InvokeServer()
+          local worldId, gridPos, regionCrossed, hexAxial, posRel = self._regionInfoRemoteFunction:InvokeServer()
           task.wait(1)
           cls:setState {
             worldId = worldId,
             gridPos = gridPos,
             regionCrossed = regionCrossed,
-            axisHex = axisHex,
+            hexAxial = hexAxial,
             posRel = posRel,
             teleportStatus = self._teleportStatus
           }
@@ -96,7 +96,7 @@ function DebugGui:generateClassComponent()
         worldId = cls.state.worldId,
         gridPos = cls.state.gridPos,
         regionCrossed = cls.state.regionCrossed,
-        axisHex = cls.state.axisHex,
+        hexAxial = cls.state.hexAxial,
         posRel = cls.state.posRel,
         teleportStatus = cls.state.teleportStatus
       })
