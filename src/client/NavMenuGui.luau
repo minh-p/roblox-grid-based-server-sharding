@@ -59,7 +59,7 @@ function NavMenuGui.constructGui(props: {open: boolean, requestTeleportRemoteEve
             TextColor3 = Color3.new(255, 255, 255),
             AnchorPoint = Vector2.new(0.5, 0.5),
             InputEnded = function(_, input: InputObject)
-              if input.UserInputType == Enum.UserInputType.MouseButton1 then
+              if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.ButtonX or input.UserInputType == Enum.UserInputType.Touch then
                 props.requestTeleportRemoteEvent:FireServer(1)
               end
             end

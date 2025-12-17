@@ -148,19 +148,13 @@ function RegionManager:_onJoin(player: Player): nil
       lookAt = teleportData.lookAt
       enterDir = teleportData.enterDir or -1
     end
-    if teleportData.worldId and teleportData.gridPos then
-      if self._regionIsLoaded then
-        if RunService:IsStudio() then
-        else
-          player:Kick("Region has already loaded. Your state in the last region should be saved. Otherwise, submit a ticket.")
-        end
-      else
-        self._gridPos = teleportData.gridPos
-        self._worldId = teleportData.worldId
-        self:loadRegion(player, teleportData.accessCode)
-      end
+    if teleportData.worldId and teleportData.gridPos and not self._regionIsLoaded then
+      self._gridPos = teleportData.gridPos
+      self._worldId = teleportData.worldId
+      self:loadRegion(player, teleportData.accessCode)
     end
   end
+  print(player.Name, teleportData.localPos)
   -- Update player's location to that of region.
   local success, err = pcall(function()
     self._playerLocationStore:UpdateAsync(player.UserId, function(old)
@@ -195,6 +189,7 @@ function RegionManager:_onJoin(player: Player): nil
     end
 
     playerCharacter:MoveTo(position)
+    task.wait()
     playerCharacter:PivotTo(cf)
   end
   return nil
@@ -233,7 +228,7 @@ function RegionManager:_onTeleportRequest(player, worldNumber: number)
   end
 
   local getRegionLiveSuccess, regionLiveVal = pcall(function()
-    return self._regionLive:GetAsync(`w:{worldNumber}:{r},{q}`)
+    return self._regionLive:GetAsync(`w{worldNumber}:{r},{q}`)
   end)
   if not getRegionLiveSuccess then
     warn(regionLiveVal)
@@ -244,7 +239,7 @@ function RegionManager:_onTeleportRequest(player, worldNumber: number)
     regionLiveVal.accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
     regionLiveVal.status = "booting"
     local getRegionLiveUpdatedSuccess, regionLiveUpdatedVal = pcall(function()
-      return self._regionLive:UpdateAsync(`w{worldNumber}:{r}{q}`, function(old)
+      return self._regionLive:UpdateAsync(`w{worldNumber}:{r},{q}`, function(old)
         return regionLiveVal
       end, 60)
     end)
@@ -291,7 +286,7 @@ function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
       regionLiveVal.accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
       regionLiveVal.status = "booting"
       local getRegionLiveUpdatedSuccess, regionLiveUpdatedVal = pcall(function()
-        return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_r}{new_region_q}`, function(old)
+        return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_r},{new_region_q}`, function(old)
           return regionLiveVal
         end, 60)
       end)
@@ -312,8 +307,12 @@ function RegionManager:_cycleRegionLive(): nil
     local playerCount = #Players:GetPlayers()
     local status = ""
     if old then status = old.status end
-    if status ~= "booting" and playerCount < PLAYER_SOFT_CAP then
-      status = "active"
+    if status ~= "booting" then
+      if playerCount < PLAYER_SOFT_CAP then
+        status = "active"
+      else
+        status = "full"
+      end
     end
     return {
       playerCount = playerCount,
@@ -370,10 +369,9 @@ function RegionManager:evaluateTeleportable(hexAxis: HexAxis): (boolean, boolean
     -- Teleportable, player carries load packet information
     return true, true
   else
-    if val.status ~= "active" or val.playerCount >= PLAYER_SOFT_CAP then
-      for k, v in pairs(val) do
-      end
-    return false end
+    if val.status == "full" then
+      return false
+    end
     return true
   end
 end
@@ -441,7 +439,7 @@ end
 function RegionManager:_onGetRegionInfo(player: Player)
   if not self._regionMath then return end
   local playerCharacter = player.Character or player.CharacterAdded:Wait()
-  local humanoidRootPart = playerCharacter.HumanoidRootPart or playerCharacter:WaitForChild("HumanoidRootPart")
+  local humanoidRootPart = playerCharacter:WaitForChild("HumanoidRootPart")
   local regionCrossed, axisHex, fractionalAxisHex = self:regionCrossEval(humanoidRootPart.Position)
   local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
   return self._worldId, self._gridPos, regionCrossed, axisHex, positionRelativeToNewRegion
