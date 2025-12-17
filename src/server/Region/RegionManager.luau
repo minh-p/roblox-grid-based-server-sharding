@@ -154,7 +154,6 @@ function RegionManager:_onJoin(player: Player): nil
       self:loadRegion(player, teleportData.accessCode)
     end
   end
-  print(player.Name, teleportData.localPos)
   -- Update player's location to that of region.
   local success, err = pcall(function()
     self._playerLocationStore:UpdateAsync(player.UserId, function(old)
@@ -255,7 +254,7 @@ end
 --- @within RegionManager
 local function getPlayerLookAt(player: Player): SerializedVector3
   local character = player.Character or player.CharacterAdded:Wait()
-  local hrp = character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart")
+  local hrp = character:WaitForChild("HumanoidRootPart")
   return {
     x = hrp.CFrame.LookVector.X,
     y = hrp.CFrame.LookVector.Y,
@@ -267,6 +266,7 @@ end
 function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
   if not self._regionMath then return end
   for _, player in ipairs(Players:GetPlayers()) do
+    if not self._playerPositions[player.UserId] then return end
     local crossed, axisHex, fractionalAxisHex = self:regionCrossEval(self._playerPositions[player.UserId])
     if not crossed then continue end
     local new_region_q = self._gridPos.q + axisHex.q
