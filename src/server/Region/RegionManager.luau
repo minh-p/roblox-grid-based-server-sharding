@@ -11,7 +11,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local RegionMath = require(ServerScriptService.Server.Region.RegionMath)
 local TeleportService = game:GetService("TeleportService")
 type HexAxis = Types.HexAxis
-type SerializedPosition = Types.SerializedPosition
+type SerializedVector3 = Types.SerializedVector3
 local OOP = require(ReplicatedStorage.Shared.OOP)
 
 --- @class RegionManager
@@ -63,6 +63,7 @@ local RegionManager = OOP.class{
 --- regionLive['w1:0,0']{
 ---   playerCount = 70,
 ---   status = "active" | "idle" | "booting" | "full",
+---   accessCode = "string containing private server access code"
 ---   -- TODO: need some caching of world state changes
 --- }
 --- ```
@@ -80,6 +81,9 @@ end
 
 --- Run function
 function RegionManager:run(): nil
+  if not RunService:IsStudio() and game.PrivateServerId == "" then
+    Players.CharacterAutoLoads = false
+  end
   self._worldStore = DataStoreService:GetDataStore(`{self._dataStoreNamePrefix}_WorldStore`)
   self._regionStore = DataStoreService:GetDataStore(`{self._dataStoreNamePrefix}_RegionStore`)
   self._regionLive = MemoryStoreService:GetHashMap(`{self._memoryStorePrefix}_RegionLive`)
@@ -88,26 +92,31 @@ function RegionManager:run(): nil
   self._gridPos = {r=0, q=0}
   self._worldId = "w1"
 
-  self.openNavMenuRemoteEvent = ReplicatedStorage:FindFirstChild("NavMenu") or Instance.new("RemoteEvent")
-  self.openNavMenuRemoteEvent.Name = "NavMenu"
-  self.openNavMenuRemoteEvent.Parent = ReplicatedStorage
+  self._openNavMenuRemoteEvent = ReplicatedStorage:FindFirstChild("NavMenu") or Instance.new("RemoteEvent")
+  self._openNavMenuRemoteEvent.Name = "NavMenu"
+  self._openNavMenuRemoteEvent.Parent = ReplicatedStorage
 
-  self.getGridPosRemoteFunction = ReplicatedStorage:FindFirstChild("RegionInfo") or Instance.new("RemoteFunction")
-  self.getGridPosRemoteFunction.Name = "RegionInfo"
-  self.getGridPosRemoteFunction.Parent = ReplicatedStorage
+  self._getGridPosRemoteFunction = ReplicatedStorage:FindFirstChild("RegionInfo") or Instance.new("RemoteFunction")
+  self._getGridPosRemoteFunction.Name = "RegionInfo"
+  self._getGridPosRemoteFunction.Parent = ReplicatedStorage
 
-  self.sendTeleportStatusRemoteEvent = ReplicatedStorage:FindFirstChild("TeleportStatus") or Instance.new("RemoteEvent")
-  self.sendTeleportStatusRemoteEvent.Name = "TeleportStatus"
-  self.sendTeleportStatusRemoteEvent.Parent = ReplicatedStorage
+  self._sendTeleportStatusRemoteEvent = ReplicatedStorage:FindFirstChild("TeleportStatus") or Instance.new("RemoteEvent")
+  self._sendTeleportStatusRemoteEvent.Name = "TeleportStatus"
+  self._sendTeleportStatusRemoteEvent.Parent = ReplicatedStorage
+
+  self._requestTeleportRemoteEvent = ReplicatedStorage:FindFirstChild("TeleportRequest") or Instance.new("RemoteEvent")
+  self._requestTeleportRemoteEvent.Name = "TeleportRequest"
+  self._requestTeleportRemoteEvent.Parent = ReplicatedStorage
 
   OOP.Utility.eventListener(self, Players.PlayerAdded, "_onJoin")
   OOP.Utility.eventListener(self, Players.PlayerRemoving, "_onLeave")
   OOP.Utility.eventListener(self, Players.PlayerRemoving, "_onLeave")
   OOP.Utility.bindToClose(self, "_onGameClose")
-  OOP.Utility.cycle(self, 30, "_cycleRegionLive")
+  OOP.Utility.cycle(self, 10, "_cycleRegionLive")
   OOP.Utility.cycle(self, 1, "_cyclePlayerPositionUpdating")
   OOP.Utility.cycle(self, 5, "_cyclePlayerRegionCrossingCheck")
-  OOP.Utility.remoteFunctionListener(self, self.getGridPosRemoteFunction, "_onGetRegionInfo")
+  OOP.Utility.remoteFunctionListener(self, self._getGridPosRemoteFunction, "_onGetRegionInfo")
+  OOP.Utility.remoteEventListener(self, self._requestTeleportRemoteEvent, "_onTeleportRequest")
 
   return nil
 end
@@ -115,23 +124,30 @@ end
 --- @private
 function RegionManager:_onJoin(player: Player): nil
   local teleportData = player:GetJoinData().TeleportData
-  local localPos: SerializedPosition = nil
+  local localPos: SerializedVector3 = nil
+  local lookAt: SerializedVector3 = nil
   if RunService:IsStudio() then
     teleportData = {
       worldId = "w1",
       gridPos = {r = 0, q = 0},
       accessCode = "0"
     }
+    self._openNavMenuRemoteEvent:FireClient(player)
   else
     if game.PrivateServerId == "" then
-      self.openNavMenuRemoteEvent:FireClient(player)
+      self._openNavMenuRemoteEvent:FireClient(player)
       return nil
     end
   end
 
+  print(teleportData.worldId)
+  print(teleportData.gridPos.r)
+  print(teleportData.gridPos.q)
+  print(teleportData.accessCode)
   if teleportData then
-    if teleportData.localPos then
+    if teleportData.localPos and teleportData.lookAt then
       localPos = teleportData.localPos
+      lookAt = teleportData.lookAt
     end
     if teleportData.worldId and teleportData.gridPos then
       if self._regionIsLoaded then
@@ -143,7 +159,7 @@ function RegionManager:_onJoin(player: Player): nil
       else
         self._gridPos = teleportData.gridPos
         self._worldId = teleportData.worldId
-        self:loadRegion(player, localPos, teleportData.accessCode)
+        self:loadRegion(player, teleportData.accessCode)
       end
     end
   end
@@ -157,10 +173,12 @@ function RegionManager:_onJoin(player: Player): nil
           r = self._gridPos.r,
         }
       end
-      if localPos then
-        new[self._worldId]['localPos'] = localPos
+      if localPos and lookAt then
+        new[self._worldId].localPos = localPos
+        new[self._worldId].lookAt = localPos
       else
-        localPos = new[self._worldId]['localPos']
+        localPos = new[self._worldId].localPos or {x=0, y=0, z=0}
+        lookAt = new[self._worldId].lookAt or {x=0, y=0, z=0}
       end
       return new
     end)
@@ -185,6 +203,62 @@ function RegionManager:_cyclePlayerPositionUpdating(): nil
 end
 
 --- @private
+--- @param player Player -- Player requesting to teleport
+function RegionManager:_onTeleportRequest(player, worldNumber: number)
+  if type(worldNumber) ~= "number" or worldNumber < 1 or worldNumber > 2 then return end
+  local getLocationSuccess, locationVal = pcall(function()
+    return self._playerLocationStore:GetAsync(player.UserId)[`w{worldNumber}`]
+  end)
+
+  if not getLocationSuccess then return end
+  local r = 0
+  local q = 0
+  local localPos = {x=0, y=0, z=0}
+  local lookAt = {x=0, y=0, z=0}
+  if locationVal and locationVal.localPos and locationVal.lookAt then
+    r = locationVal.r
+    q = locationVal.q
+    localPos = locationVal.localPos
+    lookAt = locationVal.localPos
+  end
+
+  local getRegionLiveSuccess, regionLiveVal = pcall(function()
+    return self._regionLive:GetAsync(`w:{worldNumber}:{r},{q}`)
+  end)
+  if not getRegionLiveSuccess then
+    warn(regionLiveVal)
+  end
+  if not regionLiveVal or not regionLiveVal.accessCode then
+    regionLiveVal = regionLiveVal or {}
+    regionLiveVal.playerCount = 0
+    regionLiveVal.accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
+    regionLiveVal.status = "booting"
+    local getRegionLiveUpdatedSuccess, regionLiveUpdatedVal = pcall(function()
+      return self._regionLive:UpdateAsync(`w{worldNumber}:{r}{q}`, function(old)
+        return regionLiveVal
+      end, 60)
+    end)
+    if not getRegionLiveUpdatedSuccess then
+      warn(regionLiveUpdatedVal)
+      return
+    end
+  end
+  self:teleportPlayerToRegion(player, {q = q, r = r}, localPos, lookAt, regionLiveVal.accessCode)
+end
+
+--- Function to get player's orientation
+--- @within RegionManager
+local function getPlayerLookAt(player: Player): SerializedVector3
+  local character = player.Character or player.CharacterAdded:Wait()
+  local hrp = character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart")
+  return {
+    x = hrp.CFrame.LookVector.X,
+    y = hrp.CFrame.LookVector.Y,
+    z = hrp.CFrame.LookVector.Z
+  }
+end
+
+--- @private
 function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
   if not self._regionMath then return end
   for _, player in ipairs(Players:GetPlayers()) do
@@ -192,25 +266,31 @@ function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
     if not crossed then continue end
     local new_region_q = self._gridPos.q + axisHex.q
     local new_region_r = self._gridPos.r + axisHex.r
-    self.sendTeleportStatusRemoteEvent:FireClient(player, `Teleporting to region ({new_region_r},{new_region_q})`)
+    print(`{new_region_r}, {new_region_q}`)
+    self._sendTeleportStatusRemoteEvent:FireClient(player, `Teleporting to region ({new_region_r},{new_region_q})`)
     local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
     local getRegionLiveSuccess, regionLiveVal = pcall(function()
-    local accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
-    return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_q},{new_region_r}`, function(old)
+      local accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
+      return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_r},{new_region_q}`, function(old)
         if not old or old.status == "idle" then
-        return {
-            accessCode = accessCode
-        }
+          return {
+            accessCode = accessCode,
+            status = "booting",
+            playerCount = 0
+          }
         end
         return old
-    end, 30)
+      end, 30)
     end)
 
+    print("almost there?")
     if not getRegionLiveSuccess then
-    warn(regionLiveVal)
-    continue
+      print("gg")
+      warn(regionLiveVal)
+      continue
     end
-    self:teleportPlayerToRegion(player, {q = new_region_q, r = new_region_r}, positionRelativeToNewRegion, regionLiveVal.accessCode)
+    print("asked to teleport final")
+    self:teleportPlayerToRegion(player, {q = new_region_q, r = new_region_r}, positionRelativeToNewRegion, getPlayerLookAt(player), regionLiveVal.accessCode)
   end
   return nil
 end
@@ -220,7 +300,8 @@ function RegionManager:_cycleRegionLive(): nil
   if not self._regionIsLoaded then return end
   self._regionLive:UpdateAsync(`{self._worldId}:{self._gridPos.r},{self._gridPos.q}`, function(old)
     local playerCount = #Players:GetPlayers()
-    local status = old.status
+    local status = ""
+    if old then status = old.status end
     if status ~= "booting" and playerCount < PLAYER_SOFT_CAP then
       status = "active"
     end
@@ -230,6 +311,7 @@ function RegionManager:_cycleRegionLive(): nil
       accessCode = old.accessCode
     }
   end, 30)
+  print("updated")
   return nil
 end
 
@@ -237,23 +319,28 @@ end
 ---
 --- @param player Player -- The player being teleported
 --- @param hexAxis HexAxis -- The grid's coordinate in hex axial coordinate
---- @param relativePosition SerializedPosition -- The player's new position relative to new region.
+--- @param relativePosition SerializedVector3 -- The player's new position relative to new region.
+--- @param lookAt SerializedVector3 -- The player's lookAt or orientation
 --- @param accessCode string -- Private server access code
-function RegionManager:teleportPlayerToRegion(player: Player, hexAxis: HexAxis, relativePosition: SerializedPosition, accessCode: string): nil
+function RegionManager:teleportPlayerToRegion(player: Player, hexAxis: HexAxis, relativePosition: SerializedVector3, lookAt: SerializedVector3, accessCode: string): nil
   if self._playerTeleportQueue[player.UserId] then return end
   self._playerTeleportQueue[player.UserId] = true
-  self.sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting...")
+  self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting...")
   if not self:evaluateTeleportable(hexAxis) then
-    self.sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting Failed")
+    self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting Failed")
   else
+    print("Teleporting!")
     TeleportService:TeleportToPrivateServer(game.PlaceId, accessCode, { player }, nil, {
-      accessCode = accessCode,
-      localPos = relativePosition
+      worldId = self._worldId,
+      gridPos = hexAxis,
+      localPos = relativePosition,
+      lookAt = lookAt,
+      accessCode = accessCode
     })
   end
   if Players:FindFirstChild(player.Name) then
     -- Debug purposes
-    self.sendTeleportStatusRemoteEvent:FireClient(player, "")
+    self._sendTeleportStatusRemoteEvent:FireClient(player, "You're still here? Lol oops")
   end
   self._playerTeleportQueue[player.UserId] = nil
   return nil
@@ -267,7 +354,6 @@ function RegionManager:evaluateTeleportable(hexAxis: HexAxis): (boolean, boolean
   local getSuccess, val = pcall(function()
     return self._regionLive:GetAsync(key)
   end)
-  print(val)
   if not getSuccess then
     warn(("RegionLive:GetAsync failed for %s: %s"):format(key, tostring(val)))
     return false
@@ -275,7 +361,15 @@ function RegionManager:evaluateTeleportable(hexAxis: HexAxis): (boolean, boolean
     -- Teleportable, player carries load packet information
     return true, true
   else
-    if val.status ~= "active" or val.playerCount >= PLAYER_SOFT_CAP then return false end
+    if val.status ~= "active" or val.playerCount >= PLAYER_SOFT_CAP then
+      print("probably the issue here")
+      print("Printing val:")
+      print(val)
+      print(val.status)
+      for k, v in pairs(val) do
+        print(k, v)
+      end
+    return false end
     return true
   end
 end
@@ -313,6 +407,8 @@ function RegionManager:_onLeave(player: Player): nil
     -- TODO: make system more robust. What if player crashes?
     self._playerLocationStore:UpdateAsync(player.UserId, function(old)
       old[self._worldId]['localPos'] = {x=playerCharacterPosition.X, y=playerCharacterPosition.Y, z=playerCharacterPosition.Z}
+      old[self._worldId].r = self._gridPos.r
+      old[self._worldId].q = self._gridPos.q
       return old
     end)
   end)
@@ -347,9 +443,8 @@ end
 --- Load region from data store, use standalone only for debug
 ---
 --- @param player Player -- Player carrying the region loading data
---- @param localPos SerializedPosition -- Position to pass to already existing region instance, region load fail.
 --- @param accessCode string -- Region's private server access code.
-function RegionManager:loadRegion(player: Player, localPos: SerializedPosition, accessCode: string): nil
+function RegionManager:loadRegion(player: Player, accessCode: string): nil
   local key = `{self._worldId}:{self._gridPos.r},{self._gridPos.q}`
   local updateSuccess, val = pcall(function()
     return self._regionLive:UpdateAsync(key, function(old)
@@ -362,14 +457,12 @@ function RegionManager:loadRegion(player: Player, localPos: SerializedPosition, 
     player:Kick("Attempting to load region failed. Submit a ticket to report. Your state in the last region should still be saved. Here's the error message regarding MemoryStoreHashmap: " .. tostring(val))
     return nil
   end
-  print(val)
   self._regionMath = RegionMath(REGION_RADIUS, self._gridPos)
   self._regionIsLoaded = true
   val = self._regionLive:UpdateAsync(key, function(old)
     old.status = "active"
     return old
   end, 60)
-  print(val)
   return nil
 end
 

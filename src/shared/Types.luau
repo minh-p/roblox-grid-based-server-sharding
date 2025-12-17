@@ -27,11 +27,11 @@ export type HexCube = {
   z: number
 }
 
---- @type SerializedPosition {x: number, y: number, z: number}
+--- @type SerializedVector3 {x: number, y: number, z: number}
 --- @within Types
 --- A struct with x, y, z serialized position components
 
-export type SerializedPosition = {
+export type SerializedVector3 = {
   x: number,
   y: number,
   z: number

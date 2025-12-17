@@ -8,7 +8,7 @@ local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 local OOP = require(ReplicatedStorage.Shared.OOP)
 local Types = require(ReplicatedStorage.Shared.Types)
 type HexAxis = Types.HexAxis
-type SerializedPosition = Types.SerializedPosition
+type SerializedVector3 = Types.SerializedVector3
 --- @class DebugGui
 --- @client
 --- DebugGui made with Pract library. Monitor world and region grid.
@@ -18,10 +18,11 @@ local DebugGui = OOP.class{}
 function DebugGui:__init()
   self._regionInfoRemoteFunction = ReplicatedStorage:FindFirstChild("RegionInfo") or ReplicatedStorage:WaitForChild("RegionInfo")
   self._sendTeleportStatusRemoteEvent = ReplicatedStorage:FindFirstChild("TeleportStatus") or ReplicatedStorage:WaitForChild("TeleportStatus")
+  self._teleportStatus = ""
 end
 
 --- Construct Gui method
-function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxis, regionCrossed: boolean, axisHex: HexAxis, posRel: SerializedPosition, teleportStatus: string}): PractElement
+function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxis, regionCrossed: boolean, axisHex: HexAxis, posRel: SerializedVector3, teleportStatus: string}): PractElement
   if not props.worldId then
     return Pract.create("ScreenGui", {ResetOnSpawn = false}, {
       Label = Pract.create("TextLabel", {
@@ -35,7 +36,7 @@ function DebugGui.constructGui(props: {worldId: string, gridPos: HexAxis, region
   else
     return Pract.create("ScreenGui", {ResetOnSpawn = false}, {
       RegionInfoLabel = Pract.create("TextLabel", {
-        Text = `Region Info: {props.worldId}: ({props.gridPos.q}, {props.gridPos.r}), Crossed Region: {props.regionCrossed}`,
+        Text = `Region Info: {props.worldId}: ({props.gridPos.r}, {props.gridPos.q}), Crossed Region: {props.regionCrossed}`,
         TextSize = 24,
         BackgroundTransparency = 1,
         Position = UDim2.fromScale(0.6, 0.1),
@@ -96,7 +97,8 @@ function DebugGui:generateClassComponent()
         gridPos = cls.state.gridPos,
         regionCrossed = cls.state.regionCrossed,
         axisHex = cls.state.axisHex,
-        posRel = cls.state.posRel
+        posRel = cls.state.posRel,
+        teleportStatus = cls.state.teleportStatus
       })
     end
   }
@@ -119,6 +121,7 @@ end
 ---
 --- @param teleportStatus string -- Status given by server.
 function DebugGui:_onSentTeleportStatus(teleportStatus: string)
+  print("status received " .. teleportStatus)
   self._teleportStatus = teleportStatus
 end
 

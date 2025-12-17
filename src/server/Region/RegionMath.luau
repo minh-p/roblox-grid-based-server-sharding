@@ -2,7 +2,7 @@ local ReplicatedStorage = game:GetService('ReplicatedStorage')
 local Types = require(ReplicatedStorage.Shared.Types)
 type HexAxis = Types.HexAxis
 type HexCube = Types.HexCube
-type SerializedPosition = Types.SerializedPosition
+type SerializedVector3 = Types.SerializedVector3
 
 --- @class RegionMath
 --- @server
@@ -85,7 +85,7 @@ end
 ---
 --- @param frHexCoord HexAxis -- Fractional hex axis coordinate.
 --- @param snHexCoord HexAxis -- Snapped hex axis coordinate.
-function RegionMath:getCartesianPositionRelativeToNewRegion(frHexCoord: HexAxis, snHexCoord: HexAxis): SerializedPosition
+function RegionMath:getCartesianPositionRelativeToNewRegion(frHexCoord: HexAxis, snHexCoord: HexAxis): SerializedVector3
   local dq = frHexCoord.q - snHexCoord.q
   local dr = frHexCoord.r - snHexCoord.r
   local x_new = self.radius * math.sqrt(3) * (dq + dr/2)

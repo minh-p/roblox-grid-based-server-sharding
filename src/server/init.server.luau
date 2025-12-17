@@ -16,6 +16,8 @@ for i = 1, 6 do
   table.insert(edges, {a = vertices[i], b = vertices[(i % 6) + 1]})
 end
 
+
+hexagonModel = Instance.new("Model")
 for _, edge in edges do
     local part = Instance.new("Part")
     part.Anchored = true
@@ -27,11 +29,10 @@ for _, edge in edges do
     part.Size = Vector3.new(1, 1, length)
     part.CFrame = CFrame.lookAt((edge.a + edge.b) / 2, edge.b)
 
-    hexagonModel = Instance.new("Model")
     part.Parent = hexagonModel
 
-    hexagonModel.Parent = workspace
 end
+hexagonModel.Parent = workspace
 
 local regionManager = RegionManager()
 regionManager:run()
