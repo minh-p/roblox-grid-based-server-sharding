@@ -121,7 +121,6 @@ end
 ---
 --- @param teleportStatus string -- Status given by server.
 function DebugGui:_onSentTeleportStatus(teleportStatus: string)
-  print("status received " .. teleportStatus)
   self._teleportStatus = teleportStatus
 end
 

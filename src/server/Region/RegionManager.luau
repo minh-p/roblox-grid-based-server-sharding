@@ -76,6 +76,7 @@ function RegionManager:__init(dataStoreNamePrefix: string | nil, memoryStorePref
   self._memoryStorePrefix = memoryStorePrefix
   self._playerLocationStoreName = playerLocationStoreName
   self._playerPositions = {}
+  self._playerLookAts = {}
   self._playerTeleportQueue = {}
 end
 
@@ -126,11 +127,12 @@ function RegionManager:_onJoin(player: Player): nil
   local teleportData = player:GetJoinData().TeleportData
   local localPos: SerializedVector3 = nil
   local lookAt: SerializedVector3 = nil
+  local enterDir: number = -1
   if RunService:IsStudio() then
     teleportData = {
       worldId = "w1",
       gridPos = {r = 0, q = 0},
-      accessCode = "0"
+      accessCode = "0",
     }
     self._openNavMenuRemoteEvent:FireClient(player)
   else
@@ -140,19 +142,15 @@ function RegionManager:_onJoin(player: Player): nil
     end
   end
 
-  print(teleportData.worldId)
-  print(teleportData.gridPos.r)
-  print(teleportData.gridPos.q)
-  print(teleportData.accessCode)
   if teleportData then
     if teleportData.localPos and teleportData.lookAt then
       localPos = teleportData.localPos
       lookAt = teleportData.lookAt
+      enterDir = teleportData.enterDir or -1
     end
     if teleportData.worldId and teleportData.gridPos then
       if self._regionIsLoaded then
         if RunService:IsStudio() then
-          print("Region is already loaded!")
         else
           player:Kick("Region has already loaded. Your state in the last region should be saved. Otherwise, submit a ticket.")
         end
@@ -188,7 +186,16 @@ function RegionManager:_onJoin(player: Player): nil
     player:Kick("Problem with region data store. Your data should be safe. If not, contact us with this screenshot")
   else
     local playerCharacter = player.Character or player.CharacterAdded:Wait()
-    playerCharacter:MoveTo(Vector3.new(localPos.x, localPos.y, localPos.z))
+    local position = Vector3.new(localPos.x, localPos.y, localPos.z)
+    local lookAtVector = Vector3.new(lookAt.x, lookAt.y, lookAt.z)
+    local cf = CFrame.lookAt(position , position + lookAtVector)
+
+    if enterDir ~= -1 then
+      cf *= CFrame.Angles(0, enterDir * math.pi/3, 0)
+    end
+
+    playerCharacter:MoveTo(position)
+    playerCharacter:PivotTo(cf)
   end
   return nil
 end
@@ -197,7 +204,9 @@ end
 function RegionManager:_cyclePlayerPositionUpdating(): nil
   for _, player in ipairs(Players:GetPlayers()) do
     local playerCharacter = player.Character or player.CharacterAdded:Wait()
-    self._playerPositions[player.UserId] = playerCharacter:WaitForChild("HumanoidRootPart").Position
+    local hrp = playerCharacter:WaitForChild("HumanoidRootPart")
+    self._playerPositions[player.UserId] = hrp.Position
+    self._playerLookAts[player.UserId] = hrp.CFrame.LookVector
   end
   return nil
 end
@@ -215,6 +224,7 @@ function RegionManager:_onTeleportRequest(player, worldNumber: number)
   local q = 0
   local localPos = {x=0, y=0, z=0}
   local lookAt = {x=0, y=0, z=0}
+  local enterDir = -1
   if locationVal and locationVal.localPos and locationVal.lookAt then
     r = locationVal.r
     q = locationVal.q
@@ -243,7 +253,7 @@ function RegionManager:_onTeleportRequest(player, worldNumber: number)
       return
     end
   end
-  self:teleportPlayerToRegion(player, {q = q, r = r}, localPos, lookAt, regionLiveVal.accessCode)
+  self:teleportPlayerToRegion(player, {q = q, r = r}, localPos, lookAt, enterDir, regionLiveVal.accessCode)
 end
 
 --- Function to get player's orientation
@@ -266,31 +276,31 @@ function RegionManager:_cyclePlayerRegionCrossingCheck(): nil
     if not crossed then continue end
     local new_region_q = self._gridPos.q + axisHex.q
     local new_region_r = self._gridPos.r + axisHex.r
-    print(`{new_region_r}, {new_region_q}`)
+    local enterDir = self._regionMath.getEnterDir(axisHex)
     self._sendTeleportStatusRemoteEvent:FireClient(player, `Teleporting to region ({new_region_r},{new_region_q})`)
     local positionRelativeToNewRegion = self._regionMath:getCartesianPositionRelativeToNewRegion(fractionalAxisHex, axisHex)
     local getRegionLiveSuccess, regionLiveVal = pcall(function()
-      local accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
-      return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_r},{new_region_q}`, function(old)
-        if not old or old.status == "idle" then
-          return {
-            accessCode = accessCode,
-            status = "booting",
-            playerCount = 0
-          }
-        end
-        return old
-      end, 30)
+      return self._regionLive:GetAsync(`{self._worldId}:{new_region_r},{new_region_q}`)
     end)
-
-    print("almost there?")
     if not getRegionLiveSuccess then
-      print("gg")
       warn(regionLiveVal)
-      continue
     end
-    print("asked to teleport final")
-    self:teleportPlayerToRegion(player, {q = new_region_q, r = new_region_r}, positionRelativeToNewRegion, getPlayerLookAt(player), regionLiveVal.accessCode)
+    if not regionLiveVal or not regionLiveVal.accessCode then
+      regionLiveVal = regionLiveVal or {}
+      regionLiveVal.playerCount = 0
+      regionLiveVal.accessCode = TeleportService:ReserveServerAsync(game.PlaceId)
+      regionLiveVal.status = "booting"
+      local getRegionLiveUpdatedSuccess, regionLiveUpdatedVal = pcall(function()
+        return self._regionLive:UpdateAsync(`{self._worldId}:{new_region_r}{new_region_q}`, function(old)
+          return regionLiveVal
+        end, 60)
+      end)
+      if not getRegionLiveUpdatedSuccess then
+        warn(regionLiveUpdatedVal)
+        return
+      end
+    end
+    self:teleportPlayerToRegion(player, {q = new_region_q, r = new_region_r}, positionRelativeToNewRegion, getPlayerLookAt(player), enterDir, regionLiveVal.accessCode)
   end
   return nil
 end
@@ -311,7 +321,6 @@ function RegionManager:_cycleRegionLive(): nil
       accessCode = old.accessCode
     }
   end, 30)
-  print("updated")
   return nil
 end
 
@@ -322,20 +331,20 @@ end
 --- @param relativePosition SerializedVector3 -- The player's new position relative to new region.
 --- @param lookAt SerializedVector3 -- The player's lookAt or orientation
 --- @param accessCode string -- Private server access code
-function RegionManager:teleportPlayerToRegion(player: Player, hexAxis: HexAxis, relativePosition: SerializedVector3, lookAt: SerializedVector3, accessCode: string): nil
+function RegionManager:teleportPlayerToRegion(player: Player, hexAxis: HexAxis, relativePosition: SerializedVector3, lookAt: SerializedVector3, enterDir: number, accessCode: string): nil
   if self._playerTeleportQueue[player.UserId] then return end
   self._playerTeleportQueue[player.UserId] = true
   self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting...")
   if not self:evaluateTeleportable(hexAxis) then
     self._sendTeleportStatusRemoteEvent:FireClient(player, "Teleporting Failed")
   else
-    print("Teleporting!")
     TeleportService:TeleportToPrivateServer(game.PlaceId, accessCode, { player }, nil, {
       worldId = self._worldId,
       gridPos = hexAxis,
       localPos = relativePosition,
       lookAt = lookAt,
-      accessCode = accessCode
+      accessCode = accessCode,
+      enterDir = enterDir
     })
   end
   if Players:FindFirstChild(player.Name) then
@@ -362,12 +371,7 @@ function RegionManager:evaluateTeleportable(hexAxis: HexAxis): (boolean, boolean
     return true, true
   else
     if val.status ~= "active" or val.playerCount >= PLAYER_SOFT_CAP then
-      print("probably the issue here")
-      print("Printing val:")
-      print(val)
-      print(val.status)
       for k, v in pairs(val) do
-        print(k, v)
       end
     return false end
     return true
@@ -386,6 +390,7 @@ end
 --- @private
 function RegionManager:_onLeave(player: Player): nil
   local playerCharacterPosition = self._playerPositions[player.UserId]
+  local playerCharacterLookAt = self._playerLookAts[player.UserId]
   local regionLiveUpdateSuccess, regionLiveUpdateError = pcall(function()
     self._regionLive:UpdateAsync(`{self._worldId}:{self._gridPos.r},{self._gridPos.q}`, function(old)
       if old and old.playerCount then
@@ -403,12 +408,14 @@ function RegionManager:_onLeave(player: Player): nil
     warn("No saved player position for " .. player.UserId)
     return
   end
+
   local locationUpdateSuccess, locationUpdateError = pcall(function()
     -- TODO: make system more robust. What if player crashes?
     self._playerLocationStore:UpdateAsync(player.UserId, function(old)
-      old[self._worldId]['localPos'] = {x=playerCharacterPosition.X, y=playerCharacterPosition.Y, z=playerCharacterPosition.Z}
+      old[self._worldId].localPos = {x=playerCharacterPosition.X, y=playerCharacterPosition.Y, z=playerCharacterPosition.Z}
       old[self._worldId].r = self._gridPos.r
       old[self._worldId].q = self._gridPos.q
+      old[self._worldId].lookAt = {x = playerCharacterLookAt.X, y = playerCharacterLookAt.Y, z = playerCharacterLookAt.Z}
       return old
     end)
   end)

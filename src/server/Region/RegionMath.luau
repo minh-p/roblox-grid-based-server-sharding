@@ -92,4 +92,27 @@ function RegionMath:getCartesianPositionRelativeToNewRegion(frHexCoord: HexAxis,
   local z_new = self.radius * 3 / 2 * dr
   return {x=x_new, y=0, z=z_new}
 end
+
+--- Return hex-edge direction index from 0-5
+--- ```
+--- (+1,0)→0
+--- (+1,−1)→1
+--- (0,−1)→2
+--- (−1,0)→3
+--- (−1,+1)→4
+--- (0,+1)→5
+--- ```
+---
+--- @param dAxialHex HexAxis -- Axial neighbor deltas
+function RegionMath.getEnterDir(dAxialHex: HexAxis): number
+  local dr = dAxialHex.r
+  local dq = dAxialHex.q
+  if dr ==  0 and dq ==  1 then return 0 end
+  if dr == -1 and dq ==  1 then return 1 end
+  if dr == -1 and dq ==  0 then return 2 end
+  if dr ==  0 and dq == -1 then return 3 end
+  if dr ==  1 and dq == -1 then return 4 end
+  if dr ==  1 and dq ==  0 then return 5 end
+  error(("not a neighbor delta: dr=%d dq=%d"):format(dr, dq))
+end
 return RegionMath
